@@ -1,0 +1,10 @@
+{
+  "name": "Remix Simulasi Radar Maritim 3D \u0026 AR - Teorema Sudut Lingkaran",
+  "description": "Simulasi maritim 3D realistis dan Augmented Reality (AR) untuk eksplorasi interaktif Teorema Sudut Lingkaran (Sudut Pusat dan Sudut Keliling).",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

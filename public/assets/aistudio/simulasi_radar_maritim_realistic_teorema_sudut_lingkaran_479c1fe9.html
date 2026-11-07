@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulasi Radar Maritim Realistic - Teorema Sudut Lingkaran</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #030712;
+            color: #E2E8F0;
+            user-select: none;
+            overflow: hidden;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0B1528;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1E293B;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+        .glass-panel {
+            background: rgba(8, 15, 30, 0.82);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glow-orange {
+            box-shadow: 0 0 20px rgba(249, 115, 22, 0.5);
+        }
+        .glow-cyan {
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.5);
+        }
+        /* Range slider styling */
+        input[type=range] {
+            accent-color: #06b6d4;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col md:flex-row">
+
+    <!-- CANVAS VIEWPORT -->
+    <div id="canvas-container" class="relative flex-1 h-full w-full bg-[#020617] overflow-hidden flex items-center justify-center">
+        <!-- Render Canvas -->
+        <canvas id="maritimeCanvas" class="w-full h-full cursor-grab active:cursor-grabbing block"></canvas>
+
+        <!-- TOP LEFT HUD - STATION STATUS & INSTRUCTIONS -->
+        <div class="absolute top-4 left-4 z-10 pointer-events-none flex flex-col gap-2 max-w-xs sm:max-w-sm">
+            <div class="glass-panel rounded-xl p-3.5 flex items-center gap-3 border-l-4 border-amber-500 shadow-2xl">
+                <div class="p-2.5 bg-amber-500/20 rounded-lg text-amber-400 border border-amber-500/30">
+                    <i data-lucide="radio" class="w-6 h-6 animate-pulse"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 font-mono">STASIUN RADAR PANTAI</div>
+                    <div class="text-sm font-extrabold text-slate-100 flex items-center gap-2">
+                        <span>Pusat O (0° Radar Tower)</span>
+                        <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="glass-panel rounded-lg px-3 py-2 text-xs text-slate-300 flex items-center gap-2 shadow-lg pointer-events-auto">
+                <i data-lucide="mouse-pointer-click" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+                <span><strong>Interaksi:</strong> Drag <strong>Kapal P</strong> atau <strong>Pelampung A/B</strong> langsung di peta.</span>
+            </div>
+        </div>
+
+        <!-- TOP RIGHT STATS HUD (DESKTOP) -->
+        <div class="absolute top-4 right-4 z-10 pointer-events-none hidden sm:flex flex-col gap-2">
+            <div class="glass-panel rounded-2xl p-4 flex items-center gap-5 border border-slate-700/60 shadow-2xl">
+                <div class="text-center px-3 border-r border-slate-700/80">
+                    <span class="block text-[10px] text-amber-400 font-mono font-bold uppercase tracking-wider">Sudut Pusat Radar (θ)</span>
+                    <span id="hud-aob" class="text-2xl font-black font-mono text-amber-400">80.0°</span>
+                    <span class="block text-[9px] text-slate-400 mt-0.5">∠AOB = 2α</span>
+                </div>
+                <div class="text-center px-3">
+                    <span class="block text-[10px] text-cyan-400 font-mono font-bold uppercase tracking-wider">Sudut Pandang Kapal (α)</span>
+                    <span id="hud-apb" class="text-2xl font-black font-mono text-cyan-400">40.0°</span>
+                    <span class="block text-[9px] text-slate-400 mt-0.5">∠APB = α</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- FLOATING BOTTOM QUICK CONTROLS -->
+        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 glass-panel px-5 py-2.5 rounded-full flex items-center gap-4 text-xs font-medium shadow-2xl border border-slate-700/60 backdrop-blur-md">
+            <button id="reset-btn" class="flex items-center gap-1.5 text-slate-300 hover:text-cyan-400 transition-colors">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                <span>Reset Posisi</span>
+            </button>
+            <div class="h-4 w-px bg-slate-700"></div>
+            <label class="flex items-center gap-2 cursor-pointer hover:text-cyan-400 text-slate-300">
+                <input type="checkbox" id="toggle-waves" checked class="rounded accent-cyan-500 w-3.5 h-3.5">
+                <span>Denyut Radar</span>
+            </label>
+            <div class="h-4 w-px bg-slate-700"></div>
+            <label class="flex items-center gap-2 cursor-pointer hover:text-cyan-400 text-slate-300">
+                <input type="checkbox" id="toggle-perspective" checked class="rounded accent-cyan-500 w-3.5 h-3.5">
+                <span>Tampilan 2.5D</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- SIDEBAR PANEL -->
+    <div class="w-full md:w-96 lg:w-[420px] bg-[#070D19] border-t md:border-t-0 md:border-l border-slate-800 flex flex-col h-[52vh] md:h-full z-20 shadow-2xl">
+        
+        <!-- Sidebar Header -->
+        <div class="p-4 border-b border-slate-800 bg-[#040914] flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-cyan-500/10 rounded-xl border border-cyan-500/20 text-cyan-400">
+                    <i data-lucide="compass" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-sm text-slate-100 leading-tight">Radar Maritim & Geometri</h1>
+                    <p class="text-xs text-slate-400">Teorema Sudut Lingkaran</p>
+                </div>
+            </div>
+            <span class="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">REALTIME</span>
+        </div>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-4">
+
+            <!-- Real-time Mathematical Verification Card -->
+            <div class="glass-panel rounded-2xl p-4 border border-slate-700/80 relative overflow-hidden shadow-lg">
+                <div class="absolute top-0 right-0 w-28 h-28 bg-gradient-to-br from-cyan-500/10 to-transparent rounded-bl-full pointer-events-none"></div>
+                
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-2">
+                    <i data-lucide="calculator" class="w-4 h-4 text-cyan-400"></i>
+                    Perhitungan Sudut Real-time
+                </h2>
+
+                <div class="space-y-3">
+                    <!-- Central Angle Card -->
+                    <div class="p-3 rounded-xl bg-slate-900/90 border border-amber-500/30 flex items-center justify-between shadow-inner">
+                        <div>
+                            <div class="text-xs text-amber-400 font-bold flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-[0_0_8px_#f59e0b]"></span>
+                                Sudut Pancaran Radar Pusat (∠AOB)
+                            </div>
+                            <div class="text-[11px] text-slate-400 mt-0.5">Sudut Pusat θ menghadap Busur AB</div>
+                        </div>
+                        <div id="panel-aob" class="text-2xl font-black font-mono text-amber-400">80.0°</div>
+                    </div>
+
+                    <!-- Inscribed Angle Card -->
+                    <div class="p-3 rounded-xl bg-slate-900/90 border border-cyan-500/30 flex items-center justify-between shadow-inner">
+                        <div>
+                            <div class="text-xs text-cyan-400 font-bold flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block shadow-[0_0_8px_#22d3ee]"></span>
+                                Sudut Pandang Optik Kapal (∠APB)
+                            </div>
+                            <div class="text-[11px] text-slate-400 mt-0.5">Sudut Keliling α pada Tepi Lingkaran</div>
+                        </div>
+                        <div id="panel-apb" class="text-2xl font-black font-mono text-cyan-400">40.0°</div>
+                    </div>
+
+                    <!-- Formula Proof Box -->
+                    <div class="p-3.5 rounded-xl bg-gradient-to-r from-cyan-950/50 to-slate-900 border border-cyan-500/40 text-center shadow-md">
+                        <div class="text-[11px] text-cyan-200 font-semibold uppercase tracking-wider mb-1">Hubungan Matematis Absolut:</div>
+                        <div class="text-lg font-black font-mono text-emerald-400 tracking-wide">
+                            ∠APB = ½ × ∠AOB
+                        </div>
+                        <div id="math-proof-text" class="text-xs font-mono text-slate-300 mt-1 bg-slate-950/60 py-1 px-2 rounded border border-slate-800 inline-block">
+                            40.0° = ½ × (80.0°)
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sliders Control Card -->
+            <div class="glass-panel rounded-2xl p-4 border border-slate-700/80 space-y-3.5 shadow-lg">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-4 h-4 text-cyan-400"></i>
+                    Kontrol Posisi & Visual
+                </h2>
+
+                <!-- Posisi Kapal P -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1 font-medium">
+                        <span class="text-cyan-300 flex items-center gap-1">
+                            <i data-lucide="ship" class="w-3.5 h-3.5"></i> Posisi Kapal P:
+                        </span>
+                        <span id="val-slider-p" class="font-mono text-cyan-400 font-bold">220°</span>
+                    </div>
+                    <input type="range" id="slider-p" min="0" max="360" value="220" 
+                        class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+                </div>
+
+                <!-- Posisi Pelampung A -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1 font-medium">
+                        <span class="text-amber-300 flex items-center gap-1">
+                            <i data-lucide="navigation-2" class="w-3.5 h-3.5"></i> Pelampung A:
+                        </span>
+                        <span id="val-slider-a" class="font-mono text-amber-400 font-bold">20°</span>
+                    </div>
+                    <input type="range" id="slider-a" min="0" max="360" value="20" 
+                        class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400">
+                </div>
+
+                <!-- Posisi Pelampung B -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1 font-medium">
+                        <span class="text-amber-300 flex items-center gap-1">
+                            <i data-lucide="navigation-2" class="w-3.5 h-3.5"></i> Pelampung B:
+                        </span>
+                        <span id="val-slider-b" class="font-mono text-amber-400 font-bold">100°</span>
+                    </div>
+                    <input type="range" id="slider-b" min="0" max="360" value="100" 
+                        class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400">
+                </div>
+
+                <!-- Kecepatan Gelombang/Denyut -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1 font-medium">
+                        <span class="text-slate-300">Kecepatan Denyut Radar:</span>
+                        <span id="val-slider-speed" class="font-mono text-slate-400 font-bold">1.0x</span>
+                    </div>
+                    <input type="range" id="slider-speed" min="0.2" max="3" step="0.1" value="1" 
+                        class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Narrative / Explanation Card -->
+            <div class="glass-panel rounded-2xl p-4 border border-slate-700/80 space-y-2.5 shadow-lg">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                    <i data-lucide="book-open" class="w-4 h-4"></i>
+                    Prinsip Geometri Maritim
+                </h2>
+                <div class="text-xs text-slate-300 space-y-2 leading-relaxed">
+                    <p>
+                        <strong class="text-amber-400">1. Pancaran Radar Pusat (∠AOB):</strong> Menara Stasiun Radar terletak di pusat jangkauan $O$. Sinar radar menjangkau Pelampung A dan Pelampung B membentang <span class="text-amber-400 font-semibold">Sudut Pusat ($2\alpha$)</span>.
+                    </p>
+                    <p>
+                        <strong class="text-cyan-400">2. Sudut Optik Kapal (∠APB):</strong> Kapal Pengawas $P$ berada pada perimeter lingkaran luar jangkauan radar. Garis pandang optik kapal ke target A dan B membentuk <span class="text-cyan-400 font-semibold">Sudut Keliling ($\alpha$)</span>.
+                    </p>
+                    <div class="p-3 rounded-xl bg-slate-900/90 border-l-4 border-amber-400 text-slate-200 text-[11px] leading-normal shadow-inner">
+                        <strong>Mengapa Nilainya Tepat Setengah?</strong><br>
+                        Selama Kapal $P$ dan Radar $O$ menghadap busur samudera yang sama (Busur AB), Teorema Sudut Lingkaran menjamin sudut pandang kapal selalu **persis separuh** dari sudut pancaran radar pusat, di mana pun kapal $P$ berlayar sepanjang tepi lingkaran.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Sidebar Footer -->
+        <div class="p-3 border-t border-slate-800 bg-[#040914] text-[11px] text-slate-500 text-center font-mono">
+            Radar Maritime Simulator v2.5 • Interactive Geometry
+        </div>
+    </div>
+
+    <!-- SIMULATION CANVAS LOGIC -->
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // Canvas & Context Setup
+        const canvas = document.getElementById('maritimeCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-container');
+
+        // State Variables
+        let width = 0;
+        let height = 0;
+        let cX = 0;
+        let cY = 0;
+        let radius = 0;
+
+        // Perspective Settings (Isometric 2.5D Tilt)
+        let isPerspective = true;
+        let scaleY = 0.65; // Flatten Y axis for 2.5D isometric view
+
+        // Angle States in Radians
+        let angleA = (20 * Math.PI) / 180;
+        let angleB = (100 * Math.PI) / 180;
+        let angleP = (220 * Math.PI) / 180;
+
+        // Animation Time Variables
+        let time = 0;
+        let pulseOffset = 0;
+        let pulseSpeed = 1.0;
+        let showWaves = true;
+
+        // Drag state
+        let activeDrag = null; // 'P', 'A', 'B'
+
+        // UI References
+        const sliderP = document.getElementById('slider-p');
+        const sliderA = document.getElementById('slider-a');
+        const sliderB = document.getElementById('slider-b');
+        const sliderSpeed = document.getElementById('slider-speed');
+
+        const valSliderP = document.getElementById('val-slider-p');
+        const valSliderA = document.getElementById('val-slider-a');
+        const valSliderB = document.getElementById('val-slider-b');
+        const valSliderSpeed = document.getElementById('val-slider-speed');
+
+        const hudAOB = document.getElementById('hud-aob');
+        const hudAPB = document.getElementById('hud-apb');
+        const panelAOB = document.getElementById('panel-aob');
+        const panelAPB = document.getElementById('panel-apb');
+        const mathProofText = document.getElementById('math-proof-text');
+
+        const toggleWaves = document.getElementById('toggle-waves');
+        const togglePerspective = document.getElementById('toggle-perspective');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // Canvas Resize Handler
+        function resizeCanvas() {
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            width = canvas.width;
+            height = canvas.height;
+
+            // Center and Scale setup
+            cX = width / (2 * window.devicePixelRatio);
+            cY = height / (2 * window.devicePixelRatio) + (isPerspective ? 20 : 0);
+            radius = Math.min(width, height) * (isPerspective ? 0.32 : 0.35) / window.devicePixelRatio;
+
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // Helper Math Functions
+        function degToRad(deg) { return (deg * Math.PI) / 180; }
+        function radToDeg(rad) {
+            let deg = (rad * 180 / Math.PI) % 360;
+            return deg < 0 ? deg + 360 : deg;
+        }
+
+        function normalizeAngle(rad) {
+            rad = rad % (2 * Math.PI);
+            return rad < 0 ? rad + 2 * Math.PI : rad;
+        }
+
+        // Project 2D Circle Point to 2.5D Isometric Canvas Space
+        function project(angle, r = radius) {
+            const sy = isPerspective ? scaleY : 1.0;
+            return {
+                x: cX + r * Math.cos(angle),
+                y: cY + (r * Math.sin(angle)) * sy
+            };
+        }
+
+        // Angle Calculation
+        function calculateAngles() {
+            let a = normalizeAngle(angleA);
+            let b = normalizeAngle(angleB);
+
+            let diff = Math.abs(b - a);
+            if (diff > Math.PI) {
+                diff = 2 * Math.PI - diff;
+            }
+
+            let degAOB = diff * (180 / Math.PI);
+            let degAPB = degAOB / 2;
+
+            return { aob: degAOB, apb: degAPB };
+        }
+
+        // Sync UI Elements
+        function updateUI() {
+            const { aob, apb } = calculateAngles();
+
+            const strAOB = aob.toFixed(1) + '°';
+            const strAPB = apb.toFixed(1) + '°';
+
+            hudAOB.textContent = strAOB;
+            hudAPB.textContent = strAPB;
+            panelAOB.textContent = strAOB;
+            panelAPB.textContent = strAPB;
+
+            mathProofText.textContent = `${strAPB} = ½ × (${strAOB})`;
+
+            valSliderP.textContent = Math.round(radToDeg(angleP)) + '°';
+            valSliderA.textContent = Math.round(radToDeg(angleA)) + '°';
+            valSliderB.textContent = Math.round(radToDeg(angleB)) + '°';
+
+            sliderP.value = Math.round(radToDeg(angleP));
+            sliderA.value = Math.round(radToDeg(angleA));
+            sliderB.value = Math.round(radToDeg(angleB));
+        }
+
+        // Sliders Listeners
+        sliderP.addEventListener('input', (e) => { angleP = degToRad(parseFloat(e.target.value)); updateUI(); });
+        sliderA.addEventListener('input', (e) => { angleA = degToRad(parseFloat(e.target.value)); updateUI(); });
+        sliderB.addEventListener('input', (e) => { angleB = degToRad(parseFloat(e.target.value)); updateUI(); });
+        sliderSpeed.addEventListener('input', (e) => {
+            pulseSpeed = parseFloat(e.target.value);
+            valSliderSpeed.textContent = pulseSpeed.toFixed(1) + 'x';
+        });
+
+        toggleWaves.addEventListener('change', (e) => showWaves = e.target.checked);
+        togglePerspective.addEventListener('change', (e) => {
+            isPerspective = e.target.checked;
+            resizeCanvas();
+        });
+
+        resetBtn.addEventListener('click', () => {
+            angleA = degToRad(20);
+            angleB = degToRad(100);
+            angleP = degToRad(220);
+            updateUI();
+        });
+
+        // Mouse Dragging Handlers
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function checkHit(pos, targetPos) {
+            const dx = pos.x - targetPos.x;
+            const dy = pos.y - targetPos.y;
+            return Math.sqrt(dx * dx + dy * dy) < 28;
+        }
+
+        function handleStart(e) {
+            const pos = getMousePos(e);
+            const posP = project(angleP);
+            const posA = project(angleA);
+            const posB = project(angleB);
+
+            if (checkHit(pos, posP)) activeDrag = 'P';
+            else if (checkHit(pos, posA)) activeDrag = 'A';
+            else if (checkHit(pos, posB)) activeDrag = 'B';
+        }
+
+        function handleMove(e) {
+            if (!activeDrag) return;
+            const pos = getMousePos(e);
+            const sy = isPerspective ? scaleY : 1.0;
+
+            // Unproject Y back to circular plane
+            const unprojectedY = (pos.y - cY) / sy;
+            let newAngle = Math.atan2(unprojectedY, pos.x - cX);
+            if (newAngle < 0) newAngle += 2 * Math.PI;
+
+            if (activeDrag === 'P') angleP = newAngle;
+            else if (activeDrag === 'A') angleA = newAngle;
+            else if (activeDrag === 'B') angleB = newAngle;
+
+            updateUI();
+        }
+
+        function handleEnd() { activeDrag = null; }
+
+        canvas.addEventListener('mousedown', handleStart);
+        canvas.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleEnd);
+
+        canvas.addEventListener('touchstart', handleStart, { passive: true });
+        canvas.addEventListener('touchmove', handleMove, { passive: true });
+        window.addEventListener('touchend', handleEnd);
+
+
+        // ==========================================
+        // REALISTIC RENDER ENGINE
+        // ==========================================
+
+        function drawOceanWater() {
+            const sy = isPerspective ? scaleY : 1.0;
+
+            // Deep Ocean Water Gradient
+            let oceanGrad = ctx.createRadialGradient(cX, cY, 10, cX, cY, radius * 2.2);
+            oceanGrad.addColorStop(0, '#0a1d37');
+            oceanGrad.addColorStop(0.5, '#051329');
+            oceanGrad.addColorStop(1, '#020712');
+
+            ctx.fillStyle = oceanGrad;
+            ctx.fillRect(0, 0, width, height);
+
+            // Animated Sea Wave Texture Lines
+            ctx.save();
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.06)';
+            ctx.lineWidth = 1.5;
+
+            for (let i = -15; i < 20; i++) {
+                ctx.beginPath();
+                let y = cY + i * 22 * sy;
+                let waveOffset = Math.sin(time * 0.002 + i) * 12;
+
+                ctx.moveTo(0, y + waveOffset);
+                for (let x = 0; x < width; x += 60) {
+                    let wY = y + Math.sin(x * 0.01 + time * 0.003 + i) * 4 * sy;
+                    ctx.lineTo(x, wY);
+                }
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawPerimeterCircle() {
+            const sy = isPerspective ? scaleY : 1.0;
+
+            ctx.save();
+
+            // Concentric Range Rings (Radar Grid)
+            for (let i = 1; i <= 3; i++) {
+                ctx.beginPath();
+                ctx.ellipse(cX, cY, (radius / 3) * i, ((radius / 3) * i) * sy, 0, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(30, 58, 138, 0.25)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            // Outer Perimeter Base Circle (Ocean Boundary)
+            ctx.beginPath();
+            ctx.ellipse(cX, cY, radius, radius * sy, 0, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 6]);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawInterceptedArc() {
+            const sy = isPerspective ? scaleY : 1.0;
+            let a = normalizeAngle(angleA);
+            let b = normalizeAngle(angleB);
+
+            let diff = Math.abs(b - a);
+            let counterClockwise = diff > Math.PI;
+
+            ctx.save();
+            ctx.beginPath();
+
+            // Intercepted Arc AB (Glowing Cyan/Teal Busur Terpotong)
+            ctx.ellipse(cX, cY, radius, radius * sy, 0, a, b, counterClockwise);
+            ctx.strokeStyle = '#22d3ee';
+            ctx.lineWidth = 6;
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 16;
+            ctx.stroke();
+
+            // Secondary Outer Wave Glow
+            ctx.beginPath();
+            ctx.ellipse(cX, cY, radius + 3, (radius + 3) * sy, 0, a, b, counterClockwise);
+            ctx.strokeStyle = 'rgba(34, 211, 238, 0.4)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawConcentricRadarPulses() {
+            if (!showWaves) return;
+            const sy = isPerspective ? scaleY : 1.0;
+
+            ctx.save();
+            const pulseCount = 4;
+            const maxR = radius * 1.1;
+
+            for (let i = 0; i < pulseCount; i++) {
+                let r = ((pulseOffset + (i * maxR / pulseCount)) % maxR);
+                let alpha = (1 - (r / maxR)) * 0.45;
+
+                ctx.beginPath();
+                ctx.ellipse(cX, cY, r, r * sy, 0, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(249, 115, 22, ${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawBeamPulses(p1, p2, color) {
+            if (!showWaves) return;
+
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+
+            ctx.save();
+            ctx.fillStyle = color;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 10;
+
+            const numPulses = 3;
+            for (let i = 0; i < numPulses; i++) {
+                let progress = ((pulseOffset * 0.02 * pulseSpeed) + i / numPulses) % 1;
+                let px = p1.x + dx * progress;
+                let py = p1.y + dy * progress;
+
+                ctx.beginPath();
+                ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function drawCentralIslandAndTower() {
+            ctx.save();
+
+            // Rocky Island Base
+            ctx.beginPath();
+            const sy = isPerspective ? scaleY : 1.0;
+            ctx.ellipse(cX, cY + 4, 34, 22 * sy, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#1e293b';
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2;
+            ctx.fill();
+            ctx.stroke();
+
+            // Inner Greenery/Rock Detail
+            ctx.beginPath();
+            ctx.ellipse(cX - 2, cY + 2, 24, 14 * sy, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#0f172a';
+            ctx.fill();
+
+            // Radar Control Tower Structure
+            const towerH = 45;
+            const towerTopY = cY - towerH;
+
+            // Tower Base Support
+            ctx.beginPath();
+            ctx.moveTo(cX - 10, cY);
+            ctx.lineTo(cX + 10, cY);
+            ctx.lineTo(cX + 6, towerTopY + 12);
+            ctx.lineTo(cX - 6, towerTopY + 12);
+            ctx.closePath();
+            ctx.fillStyle = '#475569';
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 1.5;
+            ctx.fill();
+            ctx.stroke();
+
+            // Tower Control Room Cabin
+            ctx.beginPath();
+            ctx.moveTo(cX - 12, towerTopY + 12);
+            ctx.lineTo(cX + 12, towerTopY + 12);
+            ctx.lineTo(cX + 10, towerTopY + 2);
+            ctx.lineTo(cX - 10, towerTopY + 2);
+            ctx.closePath();
+            ctx.fillStyle = '#0284c7';
+            ctx.strokeStyle = '#38bdf8';
+            ctx.fill();
+            ctx.stroke();
+
+            // Rotating Radar Antenna Head
+            const rotAngle = time * 0.003 * pulseSpeed;
+            ctx.beginPath();
+            ctx.arc(cX, towerTopY - 2, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#f97316';
+            ctx.shadowColor = '#f97316';
+            ctx.shadowBlur = 12;
+            ctx.fill();
+
+            // Antenna Bar
+            ctx.beginPath();
+            ctx.moveTo(cX - Math.cos(rotAngle) * 14, towerTopY - 6);
+            ctx.lineTo(cX + Math.cos(rotAngle) * 14, towerTopY - 6);
+            ctx.strokeStyle = '#fef08a';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Tower Center Marker Dot O
+            ctx.beginPath();
+            ctx.arc(cX, cY, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#f97316';
+            ctx.fill();
+
+            // Text Label O
+            ctx.font = 'bold 12px Inter';
+            ctx.fillStyle = '#fdba74';
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 4;
+            ctx.fillText('STASIUN RADAR O', cX - 52, cY + 32);
+
+            ctx.restore();
+        }
+
+        function drawBuoy(pos, label) {
+            ctx.save();
+
+            // Water Ripple Rings
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 10 + Math.sin(time * 0.005) * 2, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Buoy Body
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#f59e0b';
+            ctx.strokeStyle = '#fef08a';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = '#f59e0b';
+            ctx.shadowBlur = 14;
+            ctx.fill();
+            ctx.stroke();
+
+            // Flashing Beacon Light
+            if (Math.floor(time * 0.005) % 2 === 0) {
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y - 8, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#ef4444';
+                ctx.shadowColor = '#ef4444';
+                ctx.shadowBlur = 10;
+                ctx.fill();
+            }
+
+            // Buoy Label
+            ctx.font = 'bold 12px Inter';
+            ctx.fillStyle = '#fde047';
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 4;
+            ctx.fillText(`Pelampung ${label}`, pos.x + 12, pos.y + 4);
+
+            ctx.restore();
+        }
+
+        function drawContainerShip(pos) {
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+
+            // Compute Ship Orientation (Tangent to Ellipse)
+            const delta = 0.01;
+            const posNext = project(angleP + delta);
+            const angleHeading = Math.atan2(posNext.y - pos.y, posNext.x - pos.x);
+            ctx.rotate(angleHeading);
+
+            // Ship Hull Shape (Realistic Cargo Ship Outline)
+            ctx.beginPath();
+            ctx.moveTo(22, 0);       // Bow (Front)
+            ctx.lineTo(10, -9);     // Port Bow
+            ctx.lineTo(-18, -9);    // Port Stern
+            ctx.lineTo(-22, -6);    // Stern Left
+            ctx.lineTo(-22, 6);     // Stern Right
+            ctx.lineTo(-18, 9);     // Starboard Stern
+            ctx.lineTo(10, 9);      // Starboard Bow
+            ctx.closePath();
+
+            ctx.fillStyle = '#0f172a';
+            ctx.strokeStyle = '#22d3ee';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 16;
+            ctx.fill();
+            ctx.stroke();
+
+            // Cargo Containers Blocks
+            ctx.fillStyle = '#ef4444';
+            ctx.fillRect(-12, -6, 8, 12);
+
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(-2, -6, 8, 12);
+
+            ctx.fillStyle = '#eab308';
+            ctx.fillRect(8, -5, 6, 10);
+
+            // Ship Bridge Cabin (Rear)
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(-18, -5, 4, 10);
+
+            ctx.restore();
+
+            // Ship Text Overlay Label
+            ctx.save();
+            ctx.font = 'extrabold 13px Inter';
+            ctx.fillStyle = '#67e8f9';
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 6;
+            ctx.fillText('KAPAL P (TEPI LINGKARAN)', pos.x - 75, pos.y - 22);
+            ctx.restore();
+        }
+
+        function drawAngleArc(pCenter, p1, p2, radiusArc, color, labelText) {
+            ctx.save();
+            let a1 = Math.atan2(p1.y - pCenter.y, p1.x - pCenter.x);
+            let a2 = Math.atan2(p2.y - pCenter.y, p2.x - pCenter.x);
+
+            let diff = a2 - a1;
+            while (diff < -Math.PI) diff += 2 * Math.PI;
+            while (diff > Math.PI) diff -= 2 * Math.PI;
+
+            let start = a1;
+            let end = a1 + diff;
+
+            ctx.beginPath();
+            ctx.arc(pCenter.x, pCenter.y, radiusArc, start, end, diff < 0);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.fillStyle = color.replace('1)', '0.2)');
+            ctx.stroke();
+            ctx.fill();
+
+            // Arc Label positioning
+            let midAngle = a1 + diff / 2;
+            let labelX = pCenter.x + Math.cos(midAngle) * (radiusArc + 24);
+            let labelY = pCenter.y + Math.sin(midAngle) * (radiusArc + 24);
+
+            ctx.font = 'extrabold 13px JetBrains Mono';
+            ctx.fillStyle = color;
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 6;
+            ctx.fillText(labelText, labelX - 18, labelY + 4);
+
+            ctx.restore();
+        }
+
+        // ==========================================
+        // MAIN ANIMATION LOOP
+        // ==========================================
+
+        function render(timestamp) {
+            time = timestamp || 0;
+            pulseOffset += 1.2 * pulseSpeed;
+
+            // Clear Frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Project 2D/2.5D coordinates
+            const posO = { x: cX, y: cY };
+            const posA = project(angleA);
+            const posB = project(angleB);
+            const posP = project(angleP);
+
+            // 1. Draw Ocean Water & Environment Grid
+            drawOceanWater();
+            drawPerimeterCircle();
+
+            // 2. Highlight Common Intercepted Arc AB
+            drawInterceptedArc();
+
+            // 3. Concentric Radar Pulse Waves from Center
+            drawConcentricRadarPulses();
+
+            // 4. Central Radar Beams (O -> A, O -> B) [Glowing Amber/Orange Lines]
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(posA.x, posA.y);
+            ctx.lineTo(cX, cY);
+            ctx.lineTo(posB.x, posB.y);
+            ctx.strokeStyle = '#f97316';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#f97316';
+            ctx.shadowBlur = 14;
+            ctx.stroke();
+            ctx.restore();
+
+            // 5. Ship Line of Sight Beams (P -> A, P -> B) [Glowing Cyan/Teal Lines]
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(posA.x, posA.y);
+            ctx.lineTo(posP.x, posP.y);
+            ctx.lineTo(posB.x, posB.y);
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([8, 5]);
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 14;
+            ctx.stroke();
+            ctx.restore();
+
+            // 6. Pulse Waves Travelling Along Rays
+            drawBeamPulses(posO, posA, '#f97316');
+            drawBeamPulses(posO, posB, '#f97316');
+            drawBeamPulses(posP, posA, '#22d3ee');
+            drawBeamPulses(posP, posB, '#22d3ee');
+
+            // 7. Angle Arcs & Real-time Degree Labels
+            const { aob, apb } = calculateAngles();
+            drawAngleArc(posO, posA, posB, 42, 'rgba(249, 115, 22, 1)', `2α = ${aob.toFixed(1)}°`);
+            drawAngleArc(posP, posA, posB, 42, 'rgba(34, 211, 238, 1)', `α = ${apb.toFixed(1)}°`);
+
+            // 8. Draw Key Objects
+            drawCentralIslandAndTower();
+            drawBuoy(posA, 'A');
+            drawBuoy(posB, 'B');
+            drawContainerShip(posP);
+
+            requestAnimationFrame(render);
+        }
+
+        // Initialize & Launch
+        resizeCanvas();
+        updateUI();
+        requestAnimationFrame(render);
+
+    </script>
+</body>
+</html>
